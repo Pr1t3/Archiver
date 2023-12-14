@@ -1,15 +1,18 @@
 #include "Archiver.h"
 
-std::bitset<12> Archiver::Encode(std::bitset<8> symbol) {
-    for(int i = 0; i < 4; ++i){
-        bool k = symbol[i];
-        symbol[i] = symbol[7-i];
-        symbol[7-i] = k;
+void Bin(std::vector<bool>& a, int num, int pos, int delta=1){
+    while(num > 0){
+        a[pos] = num % 2;
+        num /= 2;
+        pos += delta;
     }
-    std::bitset<12> encoded_symbol;
+}
+
+std::vector<bool> Archiver::Encode(std::vector<bool> symbol) {
+    std::vector<bool> encoded_symbol(main_bits+add_bits);
     int j = 0;
     int k = 0;
-    for(int i = 1; i <= 12; ++i){
+    for(int i = 1; i <= main_bits+add_bits; ++i){
         if(i == pow(2, j)){
             encoded_symbol[i-1] = false;
             ++j;
@@ -18,30 +21,26 @@ std::bitset<12> Archiver::Encode(std::bitset<8> symbol) {
             ++k;
         }
     }
-    std::bitset<12> encoded_symbol_copy = encoded_symbol;
-    for(int i = 0; i < 4; ++i) {
+    std::vector<bool> encoded_symbol_copy = encoded_symbol;
+    for(int i = 0; i < add_bits; ++i) {
         int val = 0;
-        for (int j = 1; j <= 12; ++j) {
-            std::bitset<4> a = j;
+        for (int j = 1; j <= main_bits+add_bits; ++j) {
+            std::vector<bool> a(add_bits);
+            Bin(a, j, 0);
             val += a[i]*encoded_symbol_copy[j-1];
         }
         encoded_symbol[pow(2, i)-1] = val % 2;
-    }
-    for(int i = 0; i < 6; ++i){
-        bool k = encoded_symbol[i];
-        encoded_symbol[i] = encoded_symbol[11-i];
-        encoded_symbol[11-i] = k;
     }
 
     return encoded_symbol;
 }
 
-int Archiver::Decode(std::bitset<12> encoded_symbol) {
+std::vector<bool> Archiver::Decode(std::vector<bool> encoded_symbol) {
     // Добавить функцию проверки на 2 ошибки, если ошибки не 2, то перейти сюда и если надо, то исправить 1 бит
-    std::bitset<8> symbol;
+    std::vector<bool> symbol(main_bits);
     int j = 0;
     int k = 0;
-    for(int i = 1; i <= 12; ++i){
+    for(int i = 1; i <= main_bits+add_bits; ++i){
         if(i != pow(2, j)){
             symbol[k] = encoded_symbol[i-1];
             ++k;
@@ -49,18 +48,12 @@ int Archiver::Decode(std::bitset<12> encoded_symbol) {
             ++j;
         }
     }
-    for(int i = 0; i < 4; ++i){
-        bool k = symbol[i];
-        symbol[i] = symbol[7-i];
-        symbol[7-i] = k;
-    }
-
-    return static_cast<int>(symbol.to_ulong());
+    return symbol;
 }
 
-std::bitset<12> ToBitset(char* buffer){
-    std::bitset<12> bits;
-    for(int i = 0; i < 12; ++i){
+std::vector<bool> ToVectorBool(char* buffer){
+    std::vector<bool> bits(Archiver::main_bits+Archiver::add_bits);
+    for(int i = 0; i < Archiver::main_bits+Archiver::add_bits; ++i){
         if(buffer[i] == '1'){
             bits[i] = true;
         }
@@ -76,15 +69,16 @@ std::vector<unsigned short> Archiver::GetDateOfCreation(std::string file_name) {
     WIN32_FILE_ATTRIBUTE_DATA fileAttributes;
     if (GetFileAttributesExW(file_name_w, GetFileExInfoStandard, &fileAttributes)) {
         FILETIME file_creation_time = fileAttributes.ftCreationTime;
-        SYSTEMTIME system_creation_time;
+        SYSTEMTIME system_creation_time_local, system_creation_time_UTC;
 
-        FileTimeToSystemTime(&file_creation_time, &system_creation_time);
-        unsigned short year = system_creation_time.wYear;
-        unsigned short month = system_creation_time.wMonth;
-        unsigned short day = system_creation_time.wDay;
-        unsigned short hour = system_creation_time.wHour;
-        unsigned short minute = system_creation_time.wMinute;
-        unsigned short second = system_creation_time.wSecond;
+        FileTimeToSystemTime(&file_creation_time, &system_creation_time_UTC);
+        SystemTimeToTzSpecificLocalTime(nullptr, &system_creation_time_UTC, &system_creation_time_local);
+        unsigned short year = system_creation_time_local.wYear;
+        unsigned short month = system_creation_time_local.wMonth;
+        unsigned short day = system_creation_time_local.wDay;
+        unsigned short hour = system_creation_time_local.wHour;
+        unsigned short minute = system_creation_time_local.wMinute;
+        unsigned short second = system_creation_time_local.wSecond;
         std::vector<unsigned short> data = {year, month, day, hour, minute, second};
         return data;
     } else {
@@ -234,6 +228,13 @@ void Archiver::Create(std::string archive_name) {
     full_name_archive.close();
 }
 
+void InitializationVectorBool(std::vector<bool>& bits, int count, char symbol, int index){
+    for(int i = count; i >= 0; --i){
+        bits[index] = (symbol >> i) & 1;
+        ++index;
+    }
+}
+
 void Archiver::Append(std::string archive_name, std::string file_name) {
     std::fstream full_name_archive(archive_name, std::ios::app);
     if(!full_name_archive.is_open()){
@@ -252,33 +253,157 @@ void Archiver::Append(std::string archive_name, std::string file_name) {
     std::vector<unsigned short> date_of_creation = GetDateOfCreation(file_name);
     std::vector<unsigned short> date_of_last_change = GetDateOfLastChange(file_name);
     long long size = GetSize(file_name);
-    for(int i = 0; i < name.size(); ++i){
-        full_name_archive << Encode(name[i]);
+    std::vector<bool> bits(main_bits);
+    int pos_bits = 0;
+
+    for(char i: name){
+        std::vector<bool> temp(8);
+        InitializationVectorBool(temp, 7, i, 0);
+        int j = 0;
+        while(j != temp.size()){
+            bits[pos_bits] = temp[j];
+            ++pos_bits;
+            ++j;
+            if(pos_bits == main_bits) {
+                std::vector<bool> encoded_bits = Encode(bits);
+                //001100010001011
+                for (bool i: encoded_bits) {
+                    full_name_archive << i;
+                }
+                pos_bits = 0;
+            }
+        }
     }
-    for(char i : extension){
-        full_name_archive << Encode(i);
+
+    for(char i: extension){
+        std::vector<bool> temp(8);
+        InitializationVectorBool(temp, 7, i, 0);
+        int j = 0;
+        while(pos_bits + temp.size()-j >= main_bits){
+            while(pos_bits != main_bits){
+                bits[pos_bits] = temp[j];
+                ++pos_bits;
+                ++j;
+            }
+            std::vector<bool> encoded_bits = Encode(bits);
+            for(bool i: encoded_bits){
+                full_name_archive << i;
+            }
+            pos_bits = 0;
+        }
+        while(j != temp.size()){
+            bits[pos_bits] = temp[j];
+            ++pos_bits;
+            ++j;
+        }
     }
+
     for(unsigned short i: date_of_creation){
-        for(int j = 8; j >= 0; j -= 8) {
-            full_name_archive << Encode(i >> j & 0xFF);
+        std::vector<bool> temp(16);
+        Bin(temp, i, 15, -1);
+        int j = 0;
+        while(pos_bits + temp.size()-j >= main_bits){
+            while(pos_bits != main_bits){
+                bits[pos_bits] = temp[j];
+                ++pos_bits;
+                ++j;
+            }
+            std::vector<bool> encoded_bits = Encode(bits);
+            for(bool m: encoded_bits){
+                full_name_archive << m;
+            }
+            pos_bits = 0;
+        }
+        while(j != temp.size()){
+            bits[pos_bits] = temp[j];
+            ++pos_bits;
+            ++j;
         }
     }
+
     for(unsigned short i: date_of_last_change){
-        for(int j = 8; j >= 0; j -= 8) {
-            full_name_archive << Encode(i >> j & 0xFF);
+        std::vector<bool> temp(16);
+        Bin(temp, i, 15, -1);
+        int j = 0;
+        while(pos_bits + temp.size()-j >= main_bits){
+            while(pos_bits != main_bits){
+                bits[pos_bits] = temp[j];
+                ++pos_bits;
+                ++j;
+            }
+            std::vector<bool> encoded_bits = Encode(bits);
+            for(bool i: encoded_bits){
+                full_name_archive << i;
+            }
+            pos_bits = 0;
+        }
+        while(j != temp.size()){
+            bits[pos_bits] = temp[j];
+            ++pos_bits;
+            ++j;
         }
     }
-    for(int i = 24; i >= 0; i -= 8){
-        full_name_archive << Encode(size >> i & 0xFF);
+
+    std::vector<bool> temp(32);
+    Bin(temp, size, 31, -1);
+    int j = 0;
+    while(pos_bits + temp.size()-j >= main_bits){
+        while(pos_bits != main_bits){
+            bits[pos_bits] = temp[j];
+            ++pos_bits;
+            ++j;
+        }
+        std::vector<bool> encoded_bits = Encode(bits);
+        for(bool i: encoded_bits){
+            full_name_archive << i;
+        }
+        pos_bits = 0;
     }
+
+    while(j != temp.size()){
+        bits[pos_bits] = temp[j];
+        ++pos_bits;
+        ++j;
+    }
+
     while(file){
+        std::vector<bool> temp(8);
         char symbol = file.get();
         if(symbol == EOF){
             break;
         }
-        full_name_archive << Encode(symbol).to_string();
+        InitializationVectorBool(temp, 7, symbol, 0);
+        int j = 0;
+        while(pos_bits + temp.size()-j >= main_bits){
+            while(pos_bits != main_bits){
+                bits[pos_bits] = temp[j];
+                ++pos_bits;
+                ++j;
+            }
+            std::vector<bool> encoded_bits = Encode(bits);
+            for(bool i: encoded_bits){
+                full_name_archive << i;
+            }
+            pos_bits = 0;
+        }
+        while(j != temp.size()){
+            bits[pos_bits] = temp[j];
+            ++pos_bits;
+            ++j;
+        }
+    }
+    if(pos_bits != 0){
+        while(pos_bits != main_bits){
+            bits[pos_bits] = false;
+            ++pos_bits;
+        }
+        std::vector<bool> encoded_bits = Encode(bits);
+        for(bool i: encoded_bits){
+            full_name_archive << i;
+        }
     }
     full_name_archive.close();
+    file.close();
 }
 
 void Archiver::Extract(std::string archive_name, std::string file_name) {
@@ -294,96 +419,349 @@ void Archiver::Extract(std::string archive_name, std::string file_name) {
     date_of_creation.resize(6);
     std::vector<unsigned short> date_of_last_change;
     date_of_last_change.resize(6);
-    long long size;
+    long long size = 0;
+    std::vector<bool> bits(8);
+    int pos_bits = 0;
     while(full_name_archive) {
         int position = 0;
-        for(int i = 0; i < 200; ++i) {
-            char buffer[12];
-            full_name_archive.read(buffer, 12);
-            char decoded_symbol = static_cast<char>(Decode(ToBitset(buffer)));
-            if(decoded_symbol == '\a'){
+        int j = 0;
+        bool is_name_ended = false;
+        for (int i = 0; i < ceil(1600.0 / main_bits); ++i) {
+            char buffer[main_bits + add_bits];
+            full_name_archive.read(buffer, main_bits + add_bits);
+            std::vector<bool> temp = Decode(ToVectorBool(buffer));
+            j = 0;
+            while (j != temp.size()) {
+                bits[pos_bits] = temp[j];
+                ++pos_bits;
+                ++j;
+                if (pos_bits == 8) {
+                    char symbol = 0;
+                    for (int m = 0; m < 8; ++m) {
+                        symbol |= (bits[m] << (7 - m));
+                    }
+                    if (symbol == '\a') {
+                        is_name_ended = true;
+                        pos_bits = 0;
+                        break;
+                    }
+                    probable_name += symbol;
+                    pos_bits = 0;
+                }
+            }
+            if (is_name_ended) {
                 break;
             }
-            probable_name += decoded_symbol;
             ++position;
         }
-        full_name_archive.seekg((200-position-1)*12, std::ios::cur);
-        if(probable_name == name){
-            position = 0;
-            for(int i = 0; i < 20; ++i){
-                char buffer[12];
-                full_name_archive.read(buffer, 12);
-                char decoded_symbol = static_cast<char>(Decode(ToBitset(buffer)));
-                if(decoded_symbol == '\a'){
+        //full_name_archive.seekg(1600/main_bits * (main_bits+add_bits) - full_name_archive.tellg());
+        /*if (!is_name_ended) {
+            int count = 0;
+            while (count < 1600 % main_bits) {
+                char buffer[main_bits + add_bits];
+                full_name_archive.read(buffer, main_bits + add_bits);
+                std::vector<bool> temp = Decode(ToVectorBool(buffer));
+                j = 0;
+                while (j != temp.size()) {
+                    bits[pos_bits] = temp[j];
+                    ++j;
+                    ++pos_bits;
+                    if (pos_bits == 8) {
+                        char symbol = 0;
+                        for (int m = 0; m < 8; ++m) {
+                            symbol |= (bits[m] << (7 - m));
+                        }
+                        if (symbol == '\a') {
+                            is_name_ended = true;
+                            pos_bits = 0;
+                            break;
+                        }
+                        probable_name += symbol;
+                        pos_bits = 0;
+                    }
+                }
+                if (is_name_ended) {
                     break;
                 }
-                extension += decoded_symbol;
+                count += (main_bits + add_bits);
                 ++position;
             }
-            full_name_archive.seekg((20-position-1)*12, std::ios::cur);
-            for(int i = 0; i < 6; ++i){
-                int value;
-                for(int j = 0; j < 2; ++j) {
-                    char buffer[12];
-                    full_name_archive.read(buffer, 12);
-                    if(j == 0) {
-                        value = Decode(ToBitset(buffer));
-                        value <<= 8;
-                    } else {
-                        value += Decode(ToBitset(buffer));
+        }
+        pos_bits = 0;
+        */
+        full_name_archive.seekg(-(position + 1) * (main_bits + add_bits), std::ios::cur);
+        bool is_extension_ended = false;
+        if (probable_name == name) {
+            full_name_archive.seekg(1600 / main_bits * (main_bits + add_bits), std::ios::cur);
+            position = 0;
+            for (int i = 0; i < ceil(160.0 / main_bits); ++i) {
+                char buffer[main_bits + add_bits];
+                full_name_archive.read(buffer, main_bits + add_bits);
+                std::vector<bool> temp = Decode(ToVectorBool(buffer));
+                i == 0 ? j = 1600 % main_bits : j = 0;
+                while (j != temp.size()) {
+                    bits[pos_bits] = temp[j];
+                    ++pos_bits;
+                    ++j;
+                    if (pos_bits == 8) {
+                        char symbol = 0;
+                        for (int m = 0; m < 8; ++m) {
+                            symbol |= (bits[m] << (7 - m));
+                        }
+                        if (symbol == '\a') {
+                            is_extension_ended = true;
+                            pos_bits = 0;
+                            break;
+                        }
+                        extension += symbol;
+                        pos_bits = 0;
                     }
                 }
-                date_of_creation[i] = value;
+                if (is_extension_ended) {
+                    break;
+                }
+                ++position;
             }
+            /*
+            if (!is_extension_ended) {
+                int count = 0;
+                while (count < 1600 % main_bits) {
+                    char buffer[main_bits + add_bits];
+                    full_name_archive.read(buffer, main_bits + add_bits);
+                    std::vector<bool> temp = Decode(ToVectorBool(buffer));
+                    count == 0 ? j = 1600 % main_bits : j = 0;
+                    while (j != temp.size()) {
+                        bits[pos_bits] = temp[j];
+                        ++pos_bits;
+                        ++j;
+                        if (pos_bits == 8) {
+                            char symbol = 0;
+                            for (int m = 0; m < 8; ++m) {
+                                symbol |= (bits[m] << (7 - m));
+                            }
+                            if (symbol == '\a') {
+                                is_extension_ended = true;
+                                pos_bits = 0;
+                                break;
+                            }
+                            extension += symbol;
+                            pos_bits = 0;
+                        }
+                    }
+                    if (is_extension_ended) {
+                        break;
+                    }
+                    count += (main_bits + add_bits);
+                    ++position;
+                }
+            }
+            */
+            pos_bits = 0;
+            full_name_archive.seekg((160 + 1600 % main_bits) / main_bits * (main_bits + add_bits) -
+                                    (position + 1) * (main_bits + add_bits), std::ios::cur);
+            int d = full_name_archive.tellg();
 
-            for(int i = 0; i < 6; ++i){
-                int value;
-                for(int j = 0; j < 2; ++j) {
-                    char buffer[12];
-                    full_name_archive.read(buffer, 12);
-                    if(j == 0) {
-                        value = Decode(ToBitset(buffer));
-                        value <<= 8;
-                    } else {
-                        value += Decode(ToBitset(buffer));
+            int count = 0;
+            bool is_ended = false;
+            int i = 0;
+            while (i < ceil((96 + (160 + 1600 % main_bits) % main_bits) / static_cast<double>(main_bits))) {
+                char buffer[main_bits + add_bits];
+                full_name_archive.read(buffer, main_bits + add_bits);
+                std::vector<bool> temp = Decode(ToVectorBool(buffer));
+                i == 0 ? j = (160 + 1600 % main_bits) % main_bits : j = 0;
+                while (j != temp.size()) {
+                    bits[pos_bits] = temp[j];
+                    ++j;
+                    ++pos_bits;
+                    if (pos_bits == 8) {
+                        date_of_creation[count / 2] <<= 8;
+                        int b = 0;
+                        for (int m = 0; m < 8; ++m) {
+                            b |= (bits[m] << (7 - m));
+                        }
+                        date_of_creation[count / 2] += b;
+                        ++count;
+                        pos_bits = 0;
+                    }
+                    if (count == 12) {
+                        is_ended = true;
+                        break;
                     }
                 }
-                date_of_last_change[i] = value;
+                ++i;
+                if (is_ended) {
+                    break;
+                }
             }
-            int value = 0;
-            for(int i = 0; i < 4; ++i){
-                char buffer[12];
-                full_name_archive.read(buffer, 12);
-                value <<= 8;
-                value |= Decode(ToBitset(buffer));
+            //int offset;
+            //ceil(96/ static_cast<double>(main_bits)) == 96/static_cast<double>(main_bits) ? offset = 0 : offset = 1;
+            full_name_archive.seekg(
+                    (floor((96 + (160 + 1600 % main_bits) % main_bits) / static_cast<double>(main_bits)) - i) *
+                    (main_bits + add_bits), std::ios::cur);
+            d = full_name_archive.tellg();
+
+            is_ended = false;
+            count = 0;
+            i = 0;
+            while (i < ceil((96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) /
+                            static_cast<double>(main_bits))) {
+                char buffer[main_bits + add_bits];
+                full_name_archive.read(buffer, main_bits + add_bits);
+                std::vector<bool> temp = Decode(ToVectorBool(buffer));
+                i == 0 ? j = (96 + (160 + 1600 % main_bits) % main_bits) % main_bits : j = 0;
+                while (j != temp.size()) {
+                    bits[pos_bits] = temp[j];
+                    ++j;
+                    ++pos_bits;
+                    if (pos_bits == 8) {
+                        date_of_last_change[count / 2] <<= 8;
+                        int b = 0;
+                        for (int m = 0; m < 8; ++m) {
+                            b |= (bits[m] << (7 - m));
+                        }
+                        date_of_last_change[count / 2] += b;
+                        ++count;
+                        pos_bits = 0;
+                    }
+                    if (count == 12) {
+                        is_ended = true;
+                        break;
+                    }
+                }
+                ++i;
+                if (is_ended) {
+                    break;
+                }
             }
-            size = value; // надо заменить на то как размер в виндоусе хранится
+            //ceil(96/static_cast<double>(main_bits)) == 96/static_cast<double>(main_bits) ? offset = 0 : offset = -1;
+            full_name_archive.seekg(floor(((96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) /
+                                           static_cast<double>(main_bits)) - i) * (main_bits + add_bits),
+                                    std::ios::cur);
+
+            is_ended = false;
+            count = 0;
+            i = 0;
+            size = 0;
+            while (i < ceil((32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) /
+                            static_cast<double>(main_bits))) {
+                char buffer[main_bits + add_bits];
+                full_name_archive.read(buffer, main_bits + add_bits);
+                std::vector<bool> temp = Decode(ToVectorBool(buffer));
+                i == 0 ? j = (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits : j = 0;
+                while (j != temp.size()) {
+                    bits[pos_bits] = temp[j];
+                    ++j;
+                    ++pos_bits;
+                    if (pos_bits == 8) {
+                        size <<= 8;
+                        int b = 0;
+                        for (int m = 0; m < 8; ++m) {
+                            b |= (bits[m] << (7 - m));
+                        }
+                        size += b;
+                        ++count;
+                        pos_bits = 0;
+                    }
+                    if (count == 4) {
+                        is_ended = true;
+                        break;
+                    }
+                }
+                ++i;
+                if (is_ended) {
+                    break;
+                }
+            }
+            full_name_archive.seekg(
+                    floor(((32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) /
+                           static_cast<double>(main_bits)) - i) * (main_bits + add_bits), std::ios::cur);
+
             std::ofstream new_file(file_name);
-            if(!new_file.is_open()){
+            if (!new_file.is_open()) {
                 std::cerr << "There is a problem with creating file";
                 exit(EXIT_FAILURE);
             }
-            for(long long i = 0; i < size; ++i){
-                char buffer[12];
-                full_name_archive.read(buffer, 12);
-                new_file << static_cast<char>(Decode(ToBitset(buffer)));
+            is_ended = false;
+            count = 0;
+            i = 0;
+            while (i < ceil((size * 8 +
+                             (32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) %
+                             main_bits) / static_cast<double>(main_bits))) {
+                char buffer[main_bits + add_bits];
+                full_name_archive.read(buffer, main_bits + add_bits);
+                std::vector<bool> temp = Decode(ToVectorBool(buffer));
+                i == 0 ? j = (32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) %
+                             main_bits : j = 0;
+                while (j != temp.size()) {
+                    bits[pos_bits] = temp[j];
+                    ++j;
+                    ++pos_bits;
+                    if (pos_bits == 8) {
+                        char symbol = 0;
+                        for (int m = 0; m < 8; ++m) {
+                            symbol |= (bits[m] << (7 - m));
+                        }
+                        new_file << symbol;
+                        ++count;
+                        pos_bits = 0;
+                    }
+                    if (count == size) {
+                        is_ended = true;
+                        break;
+                    }
+                }
+                ++i;
+                if (is_ended) {
+                    break;
+                }
             }
-            new_file.close();
             SetDateOfCreation(date_of_creation, file_name);
-            SetDateOfLastChange(date_of_last_change, file_name);
+            SetDateOfLastChange(date_of_creation, file_name);
+            new_file.close();
             break;
         } else {
-            full_name_archive.seekg((20+12+12)*12, std::ios::cur);
-            int value = 0;
-            for(int i = 0; i < 4; ++i){
-                char buffer[12];
-                full_name_archive.read(buffer, 12);
-                value <<= 8;
-                value |= Decode(ToBitset(buffer));
+            full_name_archive.seekg(ceil(244*8/main_bits*(main_bits+add_bits)), std::ios::cur);
+
+            bool is_ended = false;
+            int count = 0;
+            int i = 0;
+            size = 0;
+            while (i < ceil((32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) /
+                            static_cast<double>(main_bits))) {
+                char buffer[main_bits + add_bits];
+                full_name_archive.read(buffer, main_bits + add_bits);
+                std::vector<bool> temp = Decode(ToVectorBool(buffer));
+                i == 0 ? j = (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits : j = 0;
+                while (j != temp.size()) {
+                    bits[pos_bits] = temp[j];
+                    ++j;
+                    ++pos_bits;
+                    if (pos_bits == 8) {
+                        size <<= 8;
+                        int b = 0;
+                        for (int m = 0; m < 8; ++m) {
+                            b |= (bits[m] << (7 - m));
+                        }
+                        size += b;
+                        ++count;
+                        pos_bits = 0;
+                    }
+                    if (count == 4) {
+                        is_ended = true;
+                        break;
+                    }
+                }
+                ++i;
+                if (is_ended) {
+                    break;
+                }
             }
-            size = value;
-            full_name_archive.seekg(size*12, std::ios::cur);
+
+            full_name_archive.seekg((floor((size * 8 + (32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) % main_bits)/
+                                           static_cast<double>(main_bits)))*(main_bits+add_bits), std::ios::cur);
+
             probable_name.clear();
+            pos_bits = 0;
         }
     }
 
@@ -402,7 +780,7 @@ void Archiver::Concatenate(std::string main_archive_name, std::string additional
     char buffer[4096];
     while(additional_archive){
         additional_archive.read(buffer, 4096);
-        main_archive.write(buffer, 4096);
+        main_archive.write(buffer, strlen(buffer));
     }
     main_archive.close();
     additional_archive.close();
@@ -417,46 +795,96 @@ void Archiver::Delete(std::string archive_name, std::string file_name) {
     std::string probable_name;
     std::string name = GetFileName(file_name);
     int size;
+    std::vector<bool> bits(8);
+    int pos_bits = 0;
     while(full_name_archive){
         int position = 0;
-        for(int i = 0; i < 200; ++i) {
-            char buffer[12];
-            full_name_archive.read(buffer, 12);
-            char decoded_symbol = static_cast<char>(Decode(ToBitset(buffer)));
-            if(decoded_symbol == '\a'){
+        int j = 0;
+        bool is_name_ended = false;
+        for (int i = 0; i < ceil(1600.0 / main_bits); ++i) {
+            char buffer[main_bits + add_bits];
+            full_name_archive.read(buffer, main_bits + add_bits);
+            std::vector<bool> temp = Decode(ToVectorBool(buffer));
+            j = 0;
+            while (j != temp.size()) {
+                bits[pos_bits] = temp[j];
+                ++pos_bits;
+                ++j;
+                if (pos_bits == 8) {
+                    char symbol = 0;
+                    for (int m = 0; m < 8; ++m) {
+                        symbol |= (bits[m] << (7 - m));
+                    }
+                    if (symbol == '\a') {
+                        is_name_ended = true;
+                        pos_bits = 0;
+                        break;
+                    }
+                    probable_name += symbol;
+                    pos_bits = 0;
+                }
+            }
+            if (is_name_ended) {
                 break;
             }
-            probable_name += decoded_symbol;
             ++position;
         }
         if(probable_name == name){
+            full_name_archive.seekg(-(position + 1) * (main_bits + add_bits), std::ios::cur);
             long long pos_low_p = full_name_archive.tellp() & MAXLONGLONG - (position+1)*12;
             long long pos_high_p = (full_name_archive.tellp() >> 32) & MAXLONGLONG;
-            full_name_archive.seekg((200-position-1)*12, std::ios::cur); // мб объяединить со след строчкой
-            full_name_archive.seekg((20+12+12)*12, std::ios::cur);
-            int value = 0;
-            for(int i = 0; i < 4; ++i){
-                char buffer[12];
-                full_name_archive.read(buffer, 12);
-                value <<= 8;
-                value |= Decode(ToBitset(buffer));
+            full_name_archive.seekg(1600 / main_bits * (main_bits + add_bits), std::ios::cur);
+            full_name_archive.seekg(ceil(244*8/main_bits*(main_bits+add_bits)), std::ios::cur);
+            bool is_ended = false;
+            int count = 0;
+            int i = 0;
+            size = 0;
+            while (i < ceil((32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) /
+                            static_cast<double>(main_bits))) {
+                char buffer[main_bits + add_bits];
+                full_name_archive.read(buffer, main_bits + add_bits);
+                std::vector<bool> temp = Decode(ToVectorBool(buffer));
+                i == 0 ? j = (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits : j = 0;
+                while (j != temp.size()) {
+                    bits[pos_bits] = temp[j];
+                    ++j;
+                    ++pos_bits;
+                    if (pos_bits == 8) {
+                        size <<= 8;
+                        int b = 0;
+                        for (int m = 0; m < 8; ++m) {
+                            b |= (bits[m] << (7 - m));
+                        }
+                        size += b;
+                        ++count;
+                        pos_bits = 0;
+                    }
+                    if (count == 4) {
+                        is_ended = true;
+                        break;
+                    }
+                }
+                ++i;
+                if (is_ended) {
+                    break;
+                }
             }
-            size = value;
-            full_name_archive.seekg(size*12, std::ios::cur);
+            full_name_archive.seekg((floor((size * 8 + (32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) % main_bits)/
+                                           static_cast<double>(main_bits)))*(main_bits+add_bits), std::ios::cur);
             int cnt = 0;
             bool ok = false;
             long long pos_low_g = full_name_archive.tellg() & MAXLONGLONG;
             long long pos_high_g = full_name_archive.tellg() >> 32 & MAXLONGLONG;
             while(full_name_archive){
-                char buffer[13];
-                full_name_archive.read(buffer, 12);
-                buffer[12] = '\0';
+                char buffer[main_bits+add_bits];
+                full_name_archive.read(buffer, main_bits+add_bits);
+                //buffer[12] = '\0';
                 if(full_name_archive.tellg() != -1) {
                     pos_low_g = full_name_archive.tellg() & MAXLONGLONG;
                     pos_high_g = full_name_archive.tellg() >> 32 & MAXLONGLONG;
                 }
                 full_name_archive.seekp(pos_high_p << 32 | pos_low_p);
-                full_name_archive.write(buffer, 12);
+                full_name_archive.write(buffer, main_bits+add_bits);
                 if(full_name_archive.tellp() != -1) {
                     pos_low_p = full_name_archive.tellp() & MAXLONGLONG;
                     pos_high_p = full_name_archive.tellp() >> 32 & MAXLONGLONG;
@@ -464,7 +892,7 @@ void Archiver::Delete(std::string archive_name, std::string file_name) {
                 full_name_archive.seekg(pos_high_g << 32 | pos_low_g);
                 if(cnt < size) {
                     cnt += strlen(buffer);
-                } else if (!ok && cnt >= size*12){
+                } else if (!ok && cnt >= size*(main_bits+add_bits)){
                     ok = true;
                 }
             }
@@ -474,22 +902,51 @@ void Archiver::Delete(std::string archive_name, std::string file_name) {
                 break;
             }
         } else {
-            full_name_archive.seekg((20+12+12+200-position-1)*12, std::ios::cur);
-            int value = 0;
-            for(int i = 0; i < 4; ++i){
-                char buffer[12];
-                full_name_archive.read(buffer, 12);
-                value <<= 8;
-                value |= Decode(ToBitset(buffer));
+            full_name_archive.seekg(-(position + 1) * (main_bits + add_bits), std::ios::cur);
+            full_name_archive.seekg(1600 / main_bits * (main_bits + add_bits), std::ios::cur);
+            full_name_archive.seekg(ceil(244*8/main_bits*(main_bits+add_bits)), std::ios::cur);
+            bool is_ended = false;
+            int count = 0;
+            int i = 0;
+            size = 0;
+            while (i < ceil((32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) /
+                            static_cast<double>(main_bits))) {
+                char buffer[main_bits + add_bits];
+                full_name_archive.read(buffer, main_bits + add_bits);
+                std::vector<bool> temp = Decode(ToVectorBool(buffer));
+                i == 0 ? j = (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits : j = 0;
+                while (j != temp.size()) {
+                    bits[pos_bits] = temp[j];
+                    ++j;
+                    ++pos_bits;
+                    if (pos_bits == 8) {
+                        size <<= 8;
+                        int b = 0;
+                        for (int m = 0; m < 8; ++m) {
+                            b |= (bits[m] << (7 - m));
+                        }
+                        size += b;
+                        ++count;
+                        pos_bits = 0;
+                    }
+                    if (count == 4) {
+                        is_ended = true;
+                        break;
+                    }
+                }
+                ++i;
+                if (is_ended) {
+                    break;
+                }
             }
-            size = value;
-            full_name_archive.seekg(size*12, std::ios::cur);
+            full_name_archive.seekg((floor((size * 8 + (32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) % main_bits)/
+                                           static_cast<double>(main_bits)))*(main_bits+add_bits), std::ios::cur);
             probable_name.clear();
         }
     }
     full_name_archive.close();
 }
-
+/*
 void Archiver::List(std::string archive_name) {
     std::fstream full_name_archive(archive_name, std::ios::in | std::ios::out | std::ios::binary);
     if(!full_name_archive.is_open()){
@@ -521,3 +978,6 @@ void Archiver::List(std::string archive_name) {
         full_name_archive.seekg(size*12, std::ios::cur);
     }
 }
+*/
+
+//01100001011 00010011000 11011001000 1100101 ||| 01100110011 00111011010 00

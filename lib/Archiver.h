@@ -9,11 +9,14 @@
 #include <windows.h>
 #include <vector>
 #include <unistd.h>
+#include <timezoneapi.h>
 
 class Archiver{
 public:
-    std::bitset<12> Encode(std::bitset<8> symbol);
-    int Decode(std::bitset<12> encoded_symbol);
+    const static int main_bits = 1700; // temporary
+    const static int add_bits = 11; // temporary
+    std::vector<bool> Encode(std::vector<bool> symbol);
+    std::vector<bool> Decode(std::vector<bool> encoded_symbol);
     std::string GetFileName(std::string file_name);
     std::string GetExtension(std::string file_name);
     std::vector<unsigned short> GetDateOfCreation(std::string file_name);

@@ -96,15 +96,23 @@ int main() {
     //arch.Append("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\2.txt");
     //arch.Append("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\1.txt");
     //arch.Append("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\1.txt");
+    /*
     arch.Append("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\1.txt");
     arch.Append("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\2.txt");
     arch.Append("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\Лекция 2.txt");
     arch.List("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf");
+    */
 
+    arch.Delete("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\Лекция 2.txt");
+    arch.Extract("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\3.txt");
+    arch.Extract("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\Лекция 2.txt");
 
-    //arch.Append("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\1.txt");
-    //arch.Append("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\2.txt");
+    //arch.Delete("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\Лекция 2.txt");
+    //arch.Extract("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\Лекция 2.txt");
+    //arch.Concatenate("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\second.haf");
 
+    //arch.Append("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\3.txt");
+    //std::cout << (int)'\a';
 
     //arch.Delete("C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\first.haf", "C:\\Users\\romap\\Downloads\\MainFolder\\Программы\\Git\\labwork6-Pr1t3\\archives\\1.txt");
 }
