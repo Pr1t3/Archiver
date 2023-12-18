@@ -1,11 +1,36 @@
 #include "Archiver.h"
 
-void Bin(std::vector<bool>& a, long long num, int pos, int delta = 1) {
+void ConvertToBin(std::vector<bool>& a, long long num, int pos, int delta = 1) {
     while (num > 0) {
         a[pos] = num % 2;
         num /= 2;
         pos += delta;
     }
+}
+
+std::vector<bool> ToVectorBool(const char* buffer, int main_bits, int add_bits) {
+    std::vector<bool> bits(main_bits + add_bits);
+    for (int i = 0; i < main_bits + add_bits; ++i) {
+        if (buffer[i] == '1') {
+            bits[i] = true;
+        }
+    }
+    return bits;
+}
+
+void InitializationVectorBool(std::vector<bool>& bits, int count, char sequence, int index) {
+    for (int i = count; i >= 0; --i) {
+        bits[index] = (sequence >> i) & 1;
+        ++index;
+    }
+}
+
+int GetAddBits(int main_bits) {
+    int k = 0;
+    while (pow(2, k) < k + main_bits + 1) {
+        ++k;
+    }
+    return k;
 }
 
 std::vector<bool> Coder::Encode(std::vector<bool> sequence, int main_bits, int add_bits) {
@@ -26,7 +51,7 @@ std::vector<bool> Coder::Encode(std::vector<bool> sequence, int main_bits, int a
         int val = 0;
         for (int j = 1; j <= main_bits + add_bits; ++j) {
             std::vector<bool> a(add_bits);
-            Bin(a, j, 0);
+            ConvertToBin(a, j, 0);
             val += a[i] * encoded_sequence_copy[j - 1];
         }
         encoded_sequence[pow(2, i) - 1] = val % 2;
@@ -50,7 +75,7 @@ std::vector<bool> Coder::Decode(std::vector<bool> encoded_sequence, int main_bit
         int val = 0;
         for (int j = 1; j <= main_bits + add_bits; ++j) {
             std::vector<bool> a(add_bits);
-            Bin(a, j, 0);
+            ConvertToBin(a, j, 0);
             val += a[i] * encoded_sequence_check[j - 1];
         }
         if (val % 2 != encoded_sequence[pow(2, i) - 1]) {
@@ -72,16 +97,6 @@ std::vector<bool> Coder::Decode(std::vector<bool> encoded_sequence, int main_bit
         }
     }
     return sequence;
-}
-
-std::vector<bool> ToVectorBool(const char* buffer, int main_bits, int add_bits) {
-    std::vector<bool> bits(main_bits + add_bits);
-    for (int i = 0; i < main_bits + add_bits; ++i) {
-        if (buffer[i] == '1') {
-            bits[i] = true;
-        }
-    }
-    return bits;
 }
 
 std::vector<unsigned short> Archiver::GetDateOfCreation(const std::string& file_name) {
@@ -342,14 +357,6 @@ void Coder::DecodeSequence(std::vector<bool>& temp, std::vector<bool>& bits, int
     }
 }
 
-int GetAddBits(int main_bits) {
-    int k = 0;
-    while (pow(2, k) < k + main_bits + 1) {
-        ++k;
-    }
-    return k;
-}
-
 void Archiver::Create(const std::string& archive_name, int main_bits) {
     std::ofstream full_name_archive(archive_name);
     if (!full_name_archive.is_open()) {
@@ -357,18 +364,11 @@ void Archiver::Create(const std::string& archive_name, int main_bits) {
         exit(EXIT_FAILURE);
     }
     std::vector<bool> temp(32);
-    Bin(temp, main_bits, 31, -1);
+    ConvertToBin(temp, main_bits, 31, -1);
     std::vector<bool> bits(8);
     int pos_bits = 0;
     Coder::EncodeSequence(temp, bits, pos_bits, full_name_archive, 8, 4);
     full_name_archive.close();
-}
-
-void InitializationVectorBool(std::vector<bool>& bits, int count, char sequence, int index) {
-    for (int i = count; i >= 0; --i) {
-        bits[index] = (sequence >> i) & 1;
-        ++index;
-    }
 }
 
 void Archiver::Append(const std::string& archive_name, const std::string& file_name) {
@@ -419,16 +419,16 @@ void Archiver::Append(const std::string& archive_name, const std::string& file_n
     }
     for (unsigned short i: date_of_creation) {
         std::vector<bool> temp(16);
-        Bin(temp, i, 15, -1);
+        ConvertToBin(temp, i, 15, -1);
         Coder::EncodeSequence(temp, bits, pos_bits, full_name_archive, main_bits, add_bits);
     }
     for (unsigned short i: date_of_last_change) {
         std::vector<bool> temp(16);
-        Bin(temp, i, 15, -1);
+        ConvertToBin(temp, i, 15, -1);
         Coder::EncodeSequence(temp, bits, pos_bits, full_name_archive, main_bits, add_bits);
     }
     std::vector<bool> temp(32);
-    Bin(temp, size, 31, -1);
+    ConvertToBin(temp, size, 31, -1);
     Coder::EncodeSequence(temp, bits, pos_bits, full_name_archive, main_bits, add_bits);
 
     while (file) {
@@ -532,8 +532,7 @@ void Archiver::Extract(const std::string& archive_name, const std::string& file_
                     break;
                 }
             }
-            full_name_archive.seekg(
-                                    (floor((96 + (160 + 1600 % main_bits) % main_bits) / static_cast<double>(main_bits)) - i) *
+            full_name_archive.seekg((floor((96 + (160 + 1600 % main_bits) % main_bits) / static_cast<double>(main_bits)) - i) *
                                     (main_bits + add_bits), std::ios::cur);
             is_ended = false;
             count = 0;
@@ -566,8 +565,7 @@ void Archiver::Extract(const std::string& archive_name, const std::string& file_
                     break;
                 }
             }
-            full_name_archive.seekg(floor(
-                                          ((32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) /
+            full_name_archive.seekg(floor(((32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) /
                                           static_cast<double>(main_bits)) - i) * (main_bits + add_bits), std::ios::cur);
             std::ofstream new_file(file_name);
             if (!new_file.is_open()) {
@@ -612,8 +610,7 @@ void Archiver::Extract(const std::string& archive_name, const std::string& file_
                 }
             }
 
-            full_name_archive.seekg((floor(
-                                           (size * 8 + (32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) % main_bits) /
+            full_name_archive.seekg((floor((size * 8 + (32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) % main_bits) /
                                            static_cast<double>(main_bits))) * (main_bits + add_bits), std::ios::cur);
             pos_bits = 0;
         }
@@ -656,7 +653,7 @@ void Archiver::Concatenate(const std::string& main_archive_name, const std::stri
         }
         main_bits_2 += b;
     }
-    if(main_bits_1 != main_bits_2){
+    if (main_bits_1 != main_bits_2) {
         std::cerr << "You can't concatenate 2 archives with different encoding";
         exit(EXIT_FAILURE);
     }
@@ -731,8 +728,7 @@ void Archiver::Delete(const std::string& archive_name, const std::string& file_n
             }
         }
         if (probable_name == name) {
-            full_name_archive.seekg((floor(
-                                           (size * 8 + (32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) % main_bits) /
+            full_name_archive.seekg((floor((size * 8 + (32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) % main_bits) /
                                            static_cast<double>(main_bits))) * (main_bits + add_bits), std::ios::cur);
             int cnt = 0;
             bool ok = false;
@@ -764,8 +760,7 @@ void Archiver::Delete(const std::string& archive_name, const std::string& file_n
                 break;
             }
         } else {
-            full_name_archive.seekg((floor(
-                                           (size * 8 + (32 +(96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) % main_bits) /
+            full_name_archive.seekg((floor((size * 8 + (32 +(96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) % main_bits) /
                                            static_cast<double>(main_bits))) * (main_bits + add_bits), std::ios::cur);
             probable_name.clear();
         }
@@ -828,8 +823,7 @@ void Archiver::List(const std::string& archive_name) {
                 break;
             }
         }
-        full_name_archive.seekg((floor(
-                                       (size * 8 + (32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) % main_bits) /
+        full_name_archive.seekg((floor((size * 8 + (32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) % main_bits) /
                                        static_cast<double>(main_bits))) * (main_bits + add_bits), std::ios::cur);
         long long pos_low_g = full_name_archive.tellg() & MAXLONGLONG;
         long long pos_high_g = full_name_archive.tellg() >> 32 & MAXLONGLONG;

@@ -1,5 +1,5 @@
-#include "../lib/Archiver.h"
-#include "../lib/ArgParser.h"
+#include <lib/Archiver.h>
+#include <lib/ArgParser.h>
 int main(int argc, char** argv) {
     ArgumentParser::ArgParser parser("parser");
     parser.AddFlag('c', "create").Default(false);

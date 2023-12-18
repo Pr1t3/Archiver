@@ -1,39 +1,50 @@
 #include "ArgParser.h"
 
 bool ArgumentParser::ArgParser::Parse(const std::vector<std::string>& arguments) {
+    std::string prev_argument;
     for (int i = 1; i < arguments.size(); ++i) {
-        if (is_positional) {
-            if (last_used == TypesOfData::int_type) {
-                int_arguments[0].AddValue(std::stoi(arguments[i]));
-            } else if (last_used == TypesOfData::string_type) {
-                string_arguments[0].AddValue(arguments[i]);
-            } else if (last_used == TypesOfData::bool_type) {
-                bool_arguments[0].AddValue(static_cast<bool>(std::stoi(arguments[i])));
+        std::string argument = std::string(arguments[i]);
+        int delimiter_pos = argument.find('=');
+        int start_index = 0;
+        while (argument[start_index] == '-' && start_index < 2) {
+            ++start_index;
+        }
+        if (delimiter_pos != std::string::npos) {
+            std::string name = argument.substr(start_index, delimiter_pos - start_index);
+            std::string value = argument.substr(delimiter_pos + 1);
+            if (name.size() > 1) {
+                PlaceValue(name, value);
+            } else {
+                PlaceValue(name[0], value);
             }
+            prev_argument.clear();
         } else {
-            int delimiter_pos = arguments[i].find('=');
-            int start_index = 0;
-            while (arguments[i][start_index] == '-' && start_index < 2) {
-                ++start_index;
-            }
-            if (delimiter_pos != std::string::npos) {
-                std::string name = arguments[i].substr(start_index, delimiter_pos - start_index);
-                std::string value = arguments[i].substr(delimiter_pos + 1);
-                if (name.size() > 1) {
-                    PlaceValue(name, value);
+            std::string name = argument.substr(start_index);
+            if (!prev_argument.empty()) {
+                if (prev_argument.size() > 1) {
+                    PlaceValue(prev_argument, name);
                 } else {
-                    PlaceValue(name[0], value);
+                    PlaceValue(prev_argument[0], name);
+                }
+                prev_argument.clear();
+            } else if (start_index == 0 || name == "f" || name == "file") {
+                if ((prev_argument != "f" | prev_argument != "file") && name != "file" && name != "f") {
+                    PlaceValue("files", name);
+                    prev_argument.clear();
+                } else {
+                    prev_argument = name;
                 }
             } else {
-                std::string name = arguments[i].substr(start_index);
                 if (name.size() > 1) {
                     if (std::all_of(name.begin(), name.end(), [this](char i) { return IsThereSuchArgument(i); })) {
                         std::for_each(name.begin(), name.end(), [this](char i) { PlaceValue(i); });
                     } else {
                         PlaceValue(name);
                     }
+                    prev_argument.clear();
                 } else {
                     PlaceValue(name[0]);
+                    prev_argument.clear();
                 }
             }
         }
@@ -41,49 +52,6 @@ bool ArgumentParser::ArgParser::Parse(const std::vector<std::string>& arguments)
     CopyElementsToOutside();
     return Check();
 }
-
-/*bool ArgumentParser::ArgParser::Parse(int argc, char** argv) {
-    for (int i = 1; i < argc; ++i) {
-        std::string argument = std::string(argv[i]);
-        if (is_positional) {
-            if (last_used == TypesOfData::int_type) {
-                int_arguments[0].AddValue(std::stoi(argument));
-            } else if (last_used == TypesOfData::string_type) {
-                string_arguments[0].AddValue(argument);
-            } else if (last_used == TypesOfData::bool_type) {
-                bool_arguments[0].AddValue(static_cast<bool>(std::stoi(argument)));
-            }
-        } else {
-            int delimiter_pos = argument.find('=');
-            int start_index = 0;
-            while (argument[start_index] == '-' && start_index < 2) {
-                ++start_index;
-            }
-            if (delimiter_pos != std::string::npos) {
-                std::string name = argument.substr(start_index, delimiter_pos - start_index);
-                std::string value = argument.substr(delimiter_pos + 1);
-                if (name.size() > 1) {
-                    PlaceValue(name, value);
-                } else {
-                    PlaceValue(name[0], value);
-                }
-            } else {
-                std::string name = argument.substr(start_index);
-                if (name.size() > 1) {
-                    if (std::all_of(name.begin(), name.end(), [this](char i) { return IsThereSuchArgument(i); })) {
-                        std::for_each(name.begin(), name.end(), [this](char i) { PlaceValue(i); });
-                    } else {
-                        PlaceValue(name);
-                    }
-                } else {
-                    PlaceValue(name[0]);
-                }
-            }
-        }
-    }
-    CopyElementsToOutside();
-    return Check();
-}*/
 bool ArgumentParser::ArgParser::Parse(int argc, char** argv) {
     std::string prev_argument;
     for (int i = 1; i < argc; ++i) {
@@ -104,15 +72,15 @@ bool ArgumentParser::ArgParser::Parse(int argc, char** argv) {
             prev_argument.clear();
         } else {
             std::string name = argument.substr(start_index);
-            if(!prev_argument.empty()){
-                if(prev_argument.size() > 1) {
+            if (!prev_argument.empty()) {
+                if (prev_argument.size() > 1) {
                     PlaceValue(prev_argument, name);
                 } else {
                     PlaceValue(prev_argument[0], name);
                 }
                 prev_argument.clear();
             } else if (start_index == 0 || name == "f" || name == "file") {
-                if((prev_argument != "f" | prev_argument != "file") && name != "file" && name != "f") {
+                if ((prev_argument != "f" | prev_argument != "file") && name != "file" && name != "f") {
                     PlaceValue("files", name);
                     prev_argument.clear();
                 } else {
@@ -487,7 +455,7 @@ ArgumentParser::ArgParser& ArgumentParser::ArgParser::MultiValue(int minCount) {
 }
 
 ArgumentParser::ArgParser& ArgumentParser::ArgParser::Positional() {
-    if(is_positional){
+    if (is_positional) {
         std::cerr << "You can't add more than 1 positional argument";
         exit(EXIT_FAILURE);
     }
@@ -499,7 +467,7 @@ bool ArgumentParser::ArgParser::Help() {
     return !(help.GetDescription().empty());
 }
 
-void ArgumentParser::ArgParser::PlaceValue(std::string name, std::string value) {
+void ArgumentParser::ArgParser::PlaceValue(const std::string& name, const std::string& value) {
     for (auto& int_argument : int_arguments) {
         if (int_argument.GetName() == name) {
             int_argument.AddValue(std::stoi(value));
@@ -520,7 +488,7 @@ void ArgumentParser::ArgParser::PlaceValue(std::string name, std::string value) 
     }
 }
 
-void ArgumentParser::ArgParser::PlaceValue(char name, std::string value) {
+void ArgumentParser::ArgParser::PlaceValue(char name, const std::string& value) {
     for (auto& int_argument : int_arguments) {
         if (int_argument.GetShortName() == name) {
             int_argument.AddValue(std::stoi(value));
@@ -571,22 +539,19 @@ bool ArgumentParser::ArgParser::IsThereSuchArgument(const std::string& arg) {
 bool ArgumentParser::ArgParser::Check() {
     if (std::any_of(string_arguments.begin(), string_arguments.end(),
                     [this](Parameter<std::string> param) {
-                        return ((param.GetValues().size() < param.GetMinCount() ||
-                                 param.GetValues().empty()) && param.GetDescription().empty());
+                        return ((param.GetValues().size() < param.GetMinCount()) && param.GetDescription().empty());
                     })) {
         return false;
     }
     if (std::any_of(int_arguments.begin(), int_arguments.end(),
                     [this](Parameter<int> param) {
-                        return ((param.GetValues().size() < param.GetMinCount() ||
-                                 param.GetValues().empty()) && param.GetDescription().empty());
+                        return ((param.GetValues().size() < param.GetMinCount()) && param.GetDescription().empty());
                     })) {
         return false;
     }
     if (std::any_of(bool_arguments.begin(), bool_arguments.end(),
                     [this](Parameter<bool> param) {
-                        return ((param.GetValues().size() < param.GetMinCount() ||
-                                 param.GetValues().empty()) && param.GetDescription().empty());
+                        return ((param.GetValues().size() < param.GetMinCount()) && param.GetDescription().empty());
                     })) {
         return false;
     }

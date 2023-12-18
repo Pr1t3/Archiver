@@ -218,9 +218,9 @@ namespace ArgumentParser {
 
         bool Help();
 
-        void PlaceValue(std::string name, std::string value);
+        void PlaceValue(const std::string& name, const std::string& value);
 
-        void PlaceValue(char name, std::string value);
+        void PlaceValue(char name, const std::string& value);
 
         void PlaceValue(const std::string& name);
 
