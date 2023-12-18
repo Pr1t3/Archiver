@@ -168,6 +168,10 @@ namespace ArgumentParser {
 
         std::string GetStringValue(char name, int index = 0);
 
+        std::vector<std::string> GetStringValues(const std::string& name);
+
+        std::vector<std::string> GetStringValues(char name);
+
         int GetIntValue(const std::string& name, int index = 0);
 
         int GetIntValue(char name, int index = 0);
@@ -214,15 +218,17 @@ namespace ArgumentParser {
 
         bool Help();
 
-        void PlaceValue(const std::string& name, const std::string& value);
+        void PlaceValue(std::string name, std::string value);
 
-        void PlaceValue(char name, const std::string& value);
+        void PlaceValue(char name, std::string value);
 
         void PlaceValue(const std::string& name);
 
         void PlaceValue(char name);
 
         bool IsThereSuchArgument(char arg);
+
+        bool IsThereSuchArgument(const std::string& arg);
 
         bool Check();
 

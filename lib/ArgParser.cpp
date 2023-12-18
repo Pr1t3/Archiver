@@ -42,7 +42,7 @@ bool ArgumentParser::ArgParser::Parse(const std::vector<std::string>& arguments)
     return Check();
 }
 
-bool ArgumentParser::ArgParser::Parse(int argc, char** argv) {
+/*bool ArgumentParser::ArgParser::Parse(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         std::string argument = std::string(argv[i]);
         if (is_positional) {
@@ -77,6 +77,58 @@ bool ArgumentParser::ArgParser::Parse(int argc, char** argv) {
                     }
                 } else {
                     PlaceValue(name[0]);
+                }
+            }
+        }
+    }
+    CopyElementsToOutside();
+    return Check();
+}*/
+bool ArgumentParser::ArgParser::Parse(int argc, char** argv) {
+    std::string prev_argument;
+    for (int i = 1; i < argc; ++i) {
+        std::string argument = std::string(argv[i]);
+        int delimiter_pos = argument.find('=');
+        int start_index = 0;
+        while (argument[start_index] == '-' && start_index < 2) {
+            ++start_index;
+        }
+        if (delimiter_pos != std::string::npos) {
+            std::string name = argument.substr(start_index, delimiter_pos - start_index);
+            std::string value = argument.substr(delimiter_pos + 1);
+            if (name.size() > 1) {
+                PlaceValue(name, value);
+            } else {
+                PlaceValue(name[0], value);
+            }
+            prev_argument.clear();
+        } else {
+            std::string name = argument.substr(start_index);
+            if(!prev_argument.empty()){
+                if(prev_argument.size() > 1) {
+                    PlaceValue(prev_argument, name);
+                } else {
+                    PlaceValue(prev_argument[0], name);
+                }
+                prev_argument.clear();
+            } else if (start_index == 0 || name == "f" || name == "file") {
+                if((prev_argument != "f" | prev_argument != "file") && name != "file" && name != "f") {
+                    PlaceValue("files", name);
+                    prev_argument.clear();
+                } else {
+                    prev_argument = name;
+                }
+            } else {
+                if (name.size() > 1) {
+                    if (std::all_of(name.begin(), name.end(), [this](char i) { return IsThereSuchArgument(i); })) {
+                        std::for_each(name.begin(), name.end(), [this](char i) { PlaceValue(i); });
+                    } else {
+                        PlaceValue(name);
+                    }
+                    prev_argument.clear();
+                } else {
+                    PlaceValue(name[0]);
+                    prev_argument.clear();
                 }
             }
         }
@@ -151,6 +203,26 @@ std::string ArgumentParser::ArgParser::GetStringValue(const char name, int index
             }
             std::cerr << "There is no value with such index";
             exit(EXIT_FAILURE);
+        }
+    }
+    std::cerr << "There is no argument with such name";
+    exit(EXIT_FAILURE);
+}
+
+std::vector<std::string> ArgumentParser::ArgParser::GetStringValues(const std::string& name) {
+    for (auto& string_argument : string_arguments) {
+        if (string_argument.GetName() == name) {
+            return string_argument.GetValues();
+        }
+    }
+    std::cerr << "There is no argument with such name";
+    exit(EXIT_FAILURE);
+}
+
+std::vector<std::string> ArgumentParser::ArgParser::GetStringValues(const char name) {
+    for (auto& string_argument : string_arguments) {
+        if (string_argument.GetShortName() == name) {
+            return string_argument.GetValues();
         }
     }
     std::cerr << "There is no argument with such name";
@@ -415,6 +487,10 @@ ArgumentParser::ArgParser& ArgumentParser::ArgParser::MultiValue(int minCount) {
 }
 
 ArgumentParser::ArgParser& ArgumentParser::ArgParser::Positional() {
+    if(is_positional){
+        std::cerr << "You can't add more than 1 positional argument";
+        exit(EXIT_FAILURE);
+    }
     is_positional = true;
     return *this;
 }
@@ -423,7 +499,7 @@ bool ArgumentParser::ArgParser::Help() {
     return !(help.GetDescription().empty());
 }
 
-void ArgumentParser::ArgParser::PlaceValue(const std::string& name, const std::string& value) {
+void ArgumentParser::ArgParser::PlaceValue(std::string name, std::string value) {
     for (auto& int_argument : int_arguments) {
         if (int_argument.GetName() == name) {
             int_argument.AddValue(std::stoi(value));
@@ -444,7 +520,7 @@ void ArgumentParser::ArgParser::PlaceValue(const std::string& name, const std::s
     }
 }
 
-void ArgumentParser::ArgParser::PlaceValue(char name, const std::string& value) {
+void ArgumentParser::ArgParser::PlaceValue(char name, std::string value) {
     for (auto& int_argument : int_arguments) {
         if (int_argument.GetShortName() == name) {
             int_argument.AddValue(std::stoi(value));
@@ -485,6 +561,11 @@ void ArgumentParser::ArgParser::PlaceValue(const char name) {
 bool ArgumentParser::ArgParser::IsThereSuchArgument(char arg) {
     return std::any_of(bool_arguments.begin(), bool_arguments.end(),
                        [this, arg](Parameter<bool> param) { return param.GetShortName() == arg; });
+}
+
+bool ArgumentParser::ArgParser::IsThereSuchArgument(const std::string& arg) {
+    return std::any_of(bool_arguments.begin(), bool_arguments.end(),
+                       [this, arg](Parameter<bool> param) { return param.GetName() == arg; });
 }
 
 bool ArgumentParser::ArgParser::Check() {
