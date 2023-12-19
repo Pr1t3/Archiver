@@ -1,5 +1,5 @@
-#include <lib/Archiver.h>
-#include <lib/ArgParser.h>
+#include "../lib/Archiver.h"
+#include "../lib/ArgParser.h"
 int main(int argc, char** argv) {
     ArgumentParser::ArgParser parser("parser");
     parser.AddFlag('c', "create").Default(false);
@@ -29,8 +29,15 @@ int main(int argc, char** argv) {
         }
     }
     if(parser.GetFlag('x')) {
-        for (std::string& i: parser.GetStringValues("files")) {
-            Archiver::Extract(parser.GetStringValue("file"), i);
+        if(parser.GetStringValues("files").empty()){
+            std::vector<std::string> files = Archiver::List(parser.GetStringValue("file"));
+            for (std::string& i: files) {
+                Archiver::Extract(parser.GetStringValue("file"), i);
+            }
+        } else {
+            for (std::string& i: parser.GetStringValues("files")) {
+                Archiver::Extract(parser.GetStringValue("file"), i);
+            }
         }
     }
     if(parser.GetFlag('d')) {
@@ -39,6 +46,6 @@ int main(int argc, char** argv) {
         }
     }
     if(parser.GetFlag('l')) {
-        Archiver::List(parser.GetStringValue("file"));
+        Archiver::List(parser.GetStringValue("file"), true);
     }
 }

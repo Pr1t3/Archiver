@@ -205,15 +205,15 @@ long long Archiver::GetSize(const std::string& file_name) {
 }
 
 std::string Archiver::GetFileName(const std::string& file_name) {
-    size_t start = 0;
-    for (size_t i = file_name.size() - 1; i >= 0; --i) {
+    long long start = 0;
+    for (long long i = file_name.size() - 1; i >= 0; --i) {
         if (file_name[i] == '\\') {
             start = i;
             break;
         }
     }
     std::string name{};
-    for (size_t i = start + 1; i < file_name.size(); ++i) {
+    for (long long i = start == 0 ? start : start + 1; i < file_name.size(); ++i) {
         if (file_name[i] == '.') {
             break;
         }
@@ -764,12 +764,13 @@ void Archiver::Delete(const std::string& archive_name, const std::string& file_n
     full_name_archive.close();
 }
 
-void Archiver::List(const std::string& archive_name) {
+std::vector<std::string> Archiver::List(const std::string& archive_name, bool is_by_user) {
     std::ifstream full_name_archive(archive_name, std::ios::binary);
     if (!full_name_archive.is_open()) {
         std::cerr << "There is a problem with opening archive";
         exit(EXIT_FAILURE);
     }
+    std::vector<std::string> files;
     int main_bits = 0;
     for (int i = 0; i < 4; ++i) {
         char buffer[12];
@@ -802,13 +803,34 @@ void Archiver::List(const std::string& archive_name) {
             }
             ++position;
         }
-        std::cout << name << '\n';
         full_name_archive.seekg(-(position + 1) * (main_bits + add_bits), std::ios::cur);
-        full_name_archive.seekg(244 * 8 / main_bits * (main_bits + add_bits), std::ios::cur);
+        bool is_extension_ended = false;
+        std::string extension;
+        position = 0;
+        for (int i = 0; i < ceil(160.0 / main_bits); ++i) {
+            char* buffer = new char[main_bits + add_bits];
+            full_name_archive.read(buffer, main_bits + add_bits);
+            std::vector<bool> temp = Coder::Decode(ToVectorBool(buffer, main_bits, add_bits), main_bits, add_bits);
+            i == 0 ? j = 1600 % main_bits : j = 0;
+            Coder::DecodeSequence(temp, bits, pos_bits, is_extension_ended, extension, j);
+            delete[] buffer;
+            if (is_extension_ended) {
+                break;
+            }
+            ++position;
+        }
+        full_name_archive.seekg(- (position + 1) * (main_bits + add_bits), std::ios::cur);
+        pos_bits = 0;
+        if (is_by_user) {
+            std::cout << name + '.' + extension << '\n';
+        }
+        files.push_back(name + '.' + extension);
+        full_name_archive.seekg(44 * 8 / main_bits * (main_bits + add_bits), std::ios::cur);
         bool is_ended = false;
         int count = 0;
         int i = 0;
         long long size = 0;
+        long long d = full_name_archive.tellg();
         while (i < ceil((32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) / static_cast<double>(main_bits))) {
             char* buffer = new char[main_bits + add_bits];
             full_name_archive.read(buffer, main_bits + add_bits);
@@ -833,4 +855,5 @@ void Archiver::List(const std::string& archive_name) {
             full_name_archive.seekg((pos_high_g << 32) | pos_low_g, std::ios::beg);
         }
     }
+    return files;
 }

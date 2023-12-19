@@ -52,7 +52,7 @@ public:
 
     static void Extract(const std::string& archive_name, const std::string& file_name);
 
-    static void List(const std::string& archive_name);
+    static std::vector<std::string> List(const std::string& archive_name, bool is_by_user = false);
 
     static void Delete(const std::string& archive_name, const std::string& file_name);
 
