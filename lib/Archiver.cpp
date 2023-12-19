@@ -39,17 +39,14 @@ std::vector<bool> Coder::Encode(std::vector<bool> sequence, int main_bits, int a
             ++data_index;
         }
     }
-
-    for (int i = 0; i < main_bits + add_bits; ++i) {
-        if ((i & (i + 1)) == 0) {
-            int parity_bit = 0;
-            for (int j = 0; j < main_bits + add_bits; ++j) {
-                if (((j + 1) & (1 << i))) {
-                    parity_bit ^= encoded_sequence[j];
-                }
+    for (int i = 0; i < add_bits; ++i) {
+        int parity_bit = 0;
+        for (int j = (1 << i) - 1; j < main_bits + add_bits; ++j) {
+            if (((j + 1) & (1 << i))) {
+                parity_bit ^= encoded_sequence[j];
             }
-            encoded_sequence[i] = parity_bit;
         }
+        encoded_sequence[(1 << i) - 1] = parity_bit;
     }
     return encoded_sequence;
 }
@@ -59,22 +56,22 @@ std::vector<bool> Coder::Decode(std::vector<bool> encoded_sequence, int main_bit
     for (int i = 0; i < add_bits; ++i) {
         encoded_sequence_copy[(1 << i) - 1] = false;
     }
-    int error_position = -1;
-    for (int i = 0; i < main_bits + add_bits; ++i) {
-        if ((i & (i + 1)) == 0) {
-            int parity_bit = 0;
-            for (int j = 0; j < main_bits + add_bits; ++j) {
-                if (((j + 1) & (1 << i))) {
+    int error_position = 0;
+    for (int i = 0; i < add_bits; ++i) {
+        int parity_bit = 0;
+        for (int j = (1 << i) - 1; j < main_bits + add_bits; ++j) {
+            if (((j + 1) & (1 << i))) {
+                if(encoded_sequence[j] == encoded_sequence_copy[j]) {
                     parity_bit ^= encoded_sequence_copy[j];
                 }
             }
-            if (parity_bit != encoded_sequence[i]) {
-                error_position += (1 << i) - 1;
-            }
+        }
+        if (parity_bit != encoded_sequence[(1 << i) - 1]) {
+            error_position += (1 << i);
         }
     }
-    if (error_position != -1) {
-        encoded_sequence[error_position] = encoded_sequence[error_position] ^ 1;
+    if (error_position != 0) {
+        encoded_sequence[error_position - 1] = encoded_sequence[error_position - 1] ^ 1;
     }
     std::vector<bool> sequence;
     for (int i = 0; i < main_bits+add_bits; ++i) {
