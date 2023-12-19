@@ -26,76 +26,63 @@ void InitializationVectorBool(std::vector<bool>& bits, int count, char sequence,
 }
 
 int GetAddBits(int main_bits) {
-    int k = 0;
-    while (pow(2, k) < k + main_bits + 1) {
-        ++k;
-    }
-    return k;
+    return static_cast<int>(floor(log2(main_bits))) + 1;
 }
 
 std::vector<bool> Coder::Encode(std::vector<bool> sequence, int main_bits, int add_bits) {
-    std::vector<bool> encoded_sequence(main_bits + add_bits);
-    int j = 0;
-    int k = 0;
+    std::vector<bool> encoded_sequence(main_bits+add_bits, false);
+
+    int data_index = 0;
     for (int i = 1; i <= main_bits + add_bits; ++i) {
-        if (i == pow(2, j)) {
-            encoded_sequence[i - 1] = false;
-            ++j;
-        } else {
-            encoded_sequence[i - 1] = sequence[k];
-            ++k;
+        if ((i & (i - 1)) != 0) {
+            encoded_sequence[i - 1] = sequence[data_index];
+            ++data_index;
         }
-    }
-    std::vector<bool> encoded_sequence_copy = encoded_sequence;
-    for (int i = 0; i < add_bits; ++i) {
-        int val = 0;
-        for (int j = 1; j <= main_bits + add_bits; ++j) {
-            std::vector<bool> a(add_bits);
-            ConvertToBin(a, j, 0);
-            val += a[i] * encoded_sequence_copy[j - 1];
-        }
-        encoded_sequence[pow(2, i) - 1] = val % 2;
     }
 
+    for (int i = 0; i < main_bits + add_bits; ++i) {
+        if ((i & (i + 1)) == 0) {
+            int parity_bit = 0;
+            for (int j = 0; j < main_bits + add_bits; ++j) {
+                if (((j + 1) & (1 << i))) {
+                    parity_bit ^= encoded_sequence[j];
+                }
+            }
+            encoded_sequence[i] = parity_bit;
+        }
+    }
     return encoded_sequence;
 }
 
 std::vector<bool> Coder::Decode(std::vector<bool> encoded_sequence, int main_bits, int add_bits) {
-    std::vector<bool> encoded_sequence_check = encoded_sequence;
-    int j = 0;
-    int k = 0;
-    for (int i = 1; i <= main_bits + add_bits; ++i) {
-        if (i == pow(2, j)) {
-            encoded_sequence_check[i - 1] = false;
-            ++j;
-        }
-    }
-    int num = -1;
+    std::vector<bool> encoded_sequence_copy = encoded_sequence;
     for (int i = 0; i < add_bits; ++i) {
-        int val = 0;
-        for (int j = 1; j <= main_bits + add_bits; ++j) {
-            std::vector<bool> a(add_bits);
-            ConvertToBin(a, j, 0);
-            val += a[i] * encoded_sequence_check[j - 1];
-        }
-        if (val % 2 != encoded_sequence[pow(2, i) - 1]) {
-            num += pow(2, i);
-        }
+        encoded_sequence_copy[(1 << i) - 1] = false;
     }
-    if (num != -1) {
-        encoded_sequence[num] = !encoded_sequence[num];
-    }
-    std::vector<bool> sequence(main_bits);
-    j = 0;
-    k = 0;
-    for (int i = 1; i <= main_bits + add_bits; ++i) {
-        if (i != pow(2, j)) {
-            sequence[k] = encoded_sequence[i - 1];
-            ++k;
-        } else {
-            ++j;
+    int error_position = -1;
+    for (int i = 0; i < main_bits + add_bits; ++i) {
+        if ((i & (i + 1)) == 0) {
+            int parity_bit = 0;
+            for (int j = 0; j < main_bits + add_bits; ++j) {
+                if (((j + 1) & (1 << i))) {
+                    parity_bit ^= encoded_sequence_copy[j];
+                }
+            }
+            if (parity_bit != encoded_sequence[i]) {
+                error_position += (1 << i) - 1;
+            }
         }
     }
+    if (error_position != -1) {
+        encoded_sequence[error_position] = encoded_sequence[error_position] ^ 1;
+    }
+    std::vector<bool> sequence;
+    for (int i = 0; i < main_bits+add_bits; ++i) {
+        if ((i & (i + 1)) != 0) {
+            sequence.push_back(encoded_sequence[i]);
+        }
+    }
+
     return sequence;
 }
 
@@ -255,7 +242,7 @@ std::string Archiver::GetExtension(const std::string& file_name) {
     return extension;
 }
 
-void Coder::Coder::EncodeSequence(std::vector<bool>& temp, std::vector<bool>& bits, int& pos_bits, std::ostream& full_name_archive, int main_bits, int add_bits) {
+void Coder::EncodeSequence(std::vector<bool>& temp, std::vector<bool>& bits, int& pos_bits, std::ostream& full_name_archive, int main_bits, int add_bits) {
     int j = 0;
     while (j != temp.size()) {
         bits[pos_bits] = temp[j];
@@ -358,7 +345,7 @@ void Coder::DecodeSequence(std::vector<bool>& temp, std::vector<bool>& bits, int
 }
 
 void Archiver::Create(const std::string& archive_name, int main_bits) {
-    std::ofstream full_name_archive(archive_name);
+    std::ofstream full_name_archive(archive_name, std::ios::binary);
     if (!full_name_archive.is_open()) {
         std::cerr << "There are some problems with creating archive";
         exit(EXIT_FAILURE);
@@ -372,7 +359,7 @@ void Archiver::Create(const std::string& archive_name, int main_bits) {
 }
 
 void Archiver::Append(const std::string& archive_name, const std::string& file_name) {
-    std::fstream full_name_archive(archive_name, std::ios::in | std::ios::app);
+    std::fstream full_name_archive(archive_name, std::ios::in | std::ios::app | std::ios::binary);
     if (!full_name_archive.is_open()) {
         std::cerr << "There are some problems with opening archive";
         exit(EXIT_FAILURE);
@@ -392,7 +379,11 @@ void Archiver::Append(const std::string& archive_name, const std::string& file_n
     }
     int add_bits = GetAddBits(main_bits);
     full_name_archive.seekg(0, std::ios::end);
-    std::ifstream file(file_name);
+    std::ifstream file(file_name, std::ios::binary);
+    if(!file.is_open()){
+        std::cerr << "File can't be opened";
+        exit(EXIT_FAILURE);
+    }
     std::string name = GetFileName(file_name);
     while (name.size() != 200) {
         name.push_back('\a');
@@ -433,10 +424,8 @@ void Archiver::Append(const std::string& archive_name, const std::string& file_n
 
     while (file) {
         std::vector<bool> temp(8);
-        char sequence = file.get();
-        if (sequence == EOF) {
-            break;
-        }
+        char sequence;
+        file.get(sequence);
         InitializationVectorBool(temp, 7, sequence, 0);
         Coder::EncodeSequence(temp, bits, pos_bits, full_name_archive, main_bits, add_bits);
     }
@@ -455,7 +444,7 @@ void Archiver::Append(const std::string& archive_name, const std::string& file_n
 }
 
 void Archiver::Extract(const std::string& archive_name, const std::string& file_name) {
-    std::ifstream full_name_archive(archive_name);
+    std::ifstream full_name_archive(archive_name, std::ios::binary);
     if (!full_name_archive.is_open()) {
         std::cerr << "There are some problems with opening archive";
         exit(EXIT_FAILURE);
@@ -488,11 +477,12 @@ void Archiver::Extract(const std::string& archive_name, const std::string& file_
         int j;
         bool is_name_ended = false;
         for (int i = 0; i < ceil(1600.0 / main_bits); ++i) {
-            char buffer[main_bits + add_bits];
+            char* buffer = new char[main_bits + add_bits];
             full_name_archive.read(buffer, main_bits + add_bits);
             std::vector<bool> temp = Coder::Decode(ToVectorBool(buffer, main_bits, add_bits), main_bits, add_bits);
             j = 0;
             Coder::DecodeSequence(temp, bits, pos_bits, is_name_ended, probable_name, j);
+            delete[] buffer;
             if (is_name_ended) {
                 break;
             }
@@ -504,11 +494,12 @@ void Archiver::Extract(const std::string& archive_name, const std::string& file_
         full_name_archive.seekg(1600 / main_bits * (main_bits + add_bits), std::ios::cur);
         position = 0;
         for (int i = 0; i < ceil(160.0 / main_bits); ++i) {
-            char buffer[main_bits + add_bits];
+            char* buffer = new char[main_bits + add_bits];
             full_name_archive.read(buffer, main_bits + add_bits);
             std::vector<bool> temp = Coder::Decode(ToVectorBool(buffer, main_bits, add_bits), main_bits, add_bits);
             i == 0 ? j = 1600 % main_bits : j = 0;
             Coder::DecodeSequence(temp, bits, pos_bits, is_extension_ended, probable_extension, j);
+            delete[] buffer;
             if (is_extension_ended) {
                 break;
             }
@@ -522,12 +513,13 @@ void Archiver::Extract(const std::string& archive_name, const std::string& file_
             bool is_ended = false;
             int i = 0;
             while (i < ceil((96 + (160 + 1600 % main_bits) % main_bits) / static_cast<double>(main_bits))) {
-                char buffer[main_bits + add_bits];
+                char* buffer = new char[main_bits + add_bits];
                 full_name_archive.read(buffer, main_bits + add_bits);
                 std::vector<bool> temp = Coder::Decode(ToVectorBool(buffer, main_bits, add_bits), main_bits, add_bits);
                 i == 0 ? j = (160 + 1600 % main_bits) % main_bits : j = 0;
                 Coder::DecodeSequence(temp, bits, pos_bits, is_ended, date_of_creation, count, j);
                 ++i;
+                delete[] buffer;
                 if (is_ended) {
                     break;
                 }
@@ -538,12 +530,13 @@ void Archiver::Extract(const std::string& archive_name, const std::string& file_
             count = 0;
             i = 0;
             while (i < ceil((96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) / static_cast<double>(main_bits))) {
-                char buffer[main_bits + add_bits];
+                char* buffer = new char[main_bits + add_bits];
                 full_name_archive.read(buffer, main_bits + add_bits);
                 std::vector<bool> temp = Coder::Decode(ToVectorBool(buffer, main_bits, add_bits), main_bits, add_bits);
                 i == 0 ? j = (96 + (160 + 1600 % main_bits) % main_bits) % main_bits : j = 0;
                 Coder::DecodeSequence(temp, bits, pos_bits, is_ended, date_of_last_change, count, j);
                 ++i;
+                delete[] buffer;
                 if (is_ended) {
                     break;
                 }
@@ -555,12 +548,13 @@ void Archiver::Extract(const std::string& archive_name, const std::string& file_
             i = 0;
             size = 0;
             while (i < ceil((32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) / static_cast<double>(main_bits))) {
-                char buffer[main_bits + add_bits];
+                char* buffer = new char[main_bits + add_bits];
                 full_name_archive.read(buffer, main_bits + add_bits);
                 std::vector<bool> temp = Coder::Decode(ToVectorBool(buffer, main_bits, add_bits), main_bits, add_bits);
                 i == 0 ? j = (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits : j = 0;
                 Coder::DecodeSequence(temp, bits, pos_bits, is_ended, size, count, j);
                 ++i;
+                delete[] buffer;
                 if (is_ended) {
                     break;
                 }
@@ -576,12 +570,13 @@ void Archiver::Extract(const std::string& archive_name, const std::string& file_
             count = 0;
             i = 0;
             while (i < ceil((size * 8 + (32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) % main_bits) / static_cast<double>(main_bits))) {
-                char buffer[main_bits + add_bits];
+                char* buffer = new char[main_bits + add_bits];
                 full_name_archive.read(buffer, main_bits + add_bits);
                 std::vector<bool> temp = Coder::Decode(ToVectorBool(buffer, main_bits, add_bits), main_bits, add_bits);
                 i == 0 ? j = (32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) % main_bits : j = 0;
                 Coder::DecodeSequence(temp, bits, pos_bits, is_ended, new_file, count, size, j);
                 ++i;
+                delete[] buffer;
                 if (is_ended) {
                     break;
                 }
@@ -599,12 +594,13 @@ void Archiver::Extract(const std::string& archive_name, const std::string& file_
             int i = 0;
             size = 0;
             while (i < ceil((32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) / static_cast<double>(main_bits))) {
-                char buffer[main_bits + add_bits];
+                char* buffer = new char[main_bits + add_bits];
                 full_name_archive.read(buffer, main_bits + add_bits);
                 std::vector<bool> temp = Coder::Decode(ToVectorBool(buffer, main_bits, add_bits), main_bits, add_bits);
                 i == 0 ? j = (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits : j = 0;
                 Coder::DecodeSequence(temp, bits, pos_bits, is_ended, size, count, j);
                 ++i;
+                delete[] buffer;
                 if (is_ended) {
                     break;
                 }
@@ -620,11 +616,11 @@ void Archiver::Extract(const std::string& archive_name, const std::string& file_
 }
 
 void Archiver::Concatenate(const std::string& main_archive_name, const std::string& additional_archive_name) {
-    std::fstream main_archive(main_archive_name, std::ios::in | std::ios::app);
+    std::fstream main_archive(main_archive_name, std::ios::in | std::ios::app | std::ios::binary);
     if (!main_archive.is_open()) {
         std::cerr << "Main archive can't be opened";
     }
-    std::ifstream additional_archive(additional_archive_name);
+    std::ifstream additional_archive(additional_archive_name, std::ios::binary);
     if (!additional_archive.is_open()) {
         std::cerr << "Additional archive can't be opened";
     }
@@ -699,11 +695,12 @@ void Archiver::Delete(const std::string& archive_name, const std::string& file_n
         int j;
         bool is_name_ended = false;
         for (int i = 0; i < ceil(1600.0 / main_bits); ++i) {
-            char buffer[main_bits + add_bits];
+            char* buffer = new char[main_bits + add_bits];
             full_name_archive.read(buffer, main_bits + add_bits);
             std::vector<bool> temp = Coder::Decode(ToVectorBool(buffer, main_bits, add_bits), main_bits, add_bits);
             j = 0;
             Coder::DecodeSequence(temp, bits, pos_bits, is_name_ended, probable_name, j);
+            delete[] buffer;
             if (is_name_ended) {
                 break;
             }
@@ -717,12 +714,13 @@ void Archiver::Delete(const std::string& archive_name, const std::string& file_n
         int i = 0;
         size = 0;
         while (i < ceil((32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) / static_cast<double>(main_bits))) {
-            char buffer[main_bits + add_bits];
+            char* buffer = new char[main_bits + add_bits];
             full_name_archive.read(buffer, main_bits + add_bits);
             std::vector<bool> temp = Coder::Decode(ToVectorBool(buffer, main_bits, add_bits), main_bits, add_bits);
             i == 0 ? j = (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits : j = 0;
             Coder::DecodeSequence(temp, bits, pos_bits, is_ended, size, count, j);
             ++i;
+            delete[] buffer;
             if (is_ended) {
                 break;
             }
@@ -735,24 +733,25 @@ void Archiver::Delete(const std::string& archive_name, const std::string& file_n
             long long pos_low_g = full_name_archive.tellg() & MAXLONGLONG;
             long long pos_high_g = full_name_archive.tellg() >> 32 & MAXLONGLONG;
             while (full_name_archive) {
-                char buffer[main_bits + add_bits];
+                char* buffer = new char[main_bits + add_bits];
                 full_name_archive.read(buffer, main_bits + add_bits);
                 if (full_name_archive.tellg() != -1) {
                     pos_low_g = full_name_archive.tellg() & MAXLONGLONG;
                     pos_high_g = full_name_archive.tellg() >> 32 & MAXLONGLONG;
                 }
                 full_name_archive.seekp(pos_high_p << 32 | pos_low_p);
-                full_name_archive.write(buffer, main_bits + add_bits);
+                full_name_archive.write(buffer, full_name_archive.gcount());
                 if (full_name_archive.tellp() != -1) {
                     pos_low_p = full_name_archive.tellp() & MAXLONGLONG;
                     pos_high_p = full_name_archive.tellp() >> 32 & MAXLONGLONG;
                 }
                 full_name_archive.seekg(pos_high_g << 32 | pos_low_g);
                 if (cnt < size) {
-                    cnt += strlen(buffer);
+                    cnt += full_name_archive.gcount();
                 } else if (!ok && cnt >= size * (main_bits + add_bits)) {
                     ok = true;
                 }
+                delete[] buffer;
             }
             if (!ok) {
                 std::filesystem::resize_file(archive_name, pos_high_p << 32 | pos_low_p);
@@ -769,7 +768,7 @@ void Archiver::Delete(const std::string& archive_name, const std::string& file_n
 }
 
 void Archiver::List(const std::string& archive_name) {
-    std::ifstream full_name_archive(archive_name);
+    std::ifstream full_name_archive(archive_name, std::ios::binary);
     if (!full_name_archive.is_open()) {
         std::cerr << "There is a problem with opening archive";
         exit(EXIT_FAILURE);
@@ -795,11 +794,12 @@ void Archiver::List(const std::string& archive_name) {
         int j = 0;
         bool is_name_ended = false;
         for (int i = 0; i < ceil(1600.0 / main_bits); ++i) {
-            char buffer[main_bits + add_bits];
+            char* buffer = new char[main_bits + add_bits];
             full_name_archive.read(buffer, main_bits + add_bits);
             std::vector<bool> temp = Coder::Decode(ToVectorBool(buffer, main_bits, add_bits), main_bits, add_bits);
             j = 0;
             Coder::DecodeSequence(temp, bits, pos_bits, is_name_ended, name, j);
+            delete[] buffer;
             if (is_name_ended) {
                 break;
             }
@@ -813,12 +813,13 @@ void Archiver::List(const std::string& archive_name) {
         int i = 0;
         long long size = 0;
         while (i < ceil((32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) / static_cast<double>(main_bits))) {
-            char buffer[main_bits + add_bits];
+            char* buffer = new char[main_bits + add_bits];
             full_name_archive.read(buffer, main_bits + add_bits);
             std::vector<bool> temp = Coder::Decode(ToVectorBool(buffer, main_bits, add_bits), main_bits, add_bits);
             i == 0 ? j = (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits : j = 0;
             Coder::DecodeSequence(temp, bits, pos_bits, is_ended, size, count, j);
             ++i;
+            delete[] buffer;
             if (is_ended) {
                 break;
             }
