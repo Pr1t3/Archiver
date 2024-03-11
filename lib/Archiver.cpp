@@ -558,7 +558,7 @@ void Archiver::Extract(const std::string& archive_name, const std::string& file_
             }
             full_name_archive.seekg(floor(((32 + (96 + (96 + (160 + 1600 % main_bits) % main_bits) % main_bits) % main_bits) /
                                           static_cast<double>(main_bits)) - i) * (main_bits + add_bits), std::ios::cur);
-            std::ofstream new_file(file_name);
+            std::ofstream new_file(file_name, std::ios::binary);
             if (!new_file.is_open()) {
                 std::cerr << "There is a problem with creating file";
                 exit(EXIT_FAILURE);
@@ -662,7 +662,7 @@ void Archiver::Concatenate(const std::string& main_archive_name, const std::stri
 }
 
 void Archiver::Delete(const std::string& archive_name, const std::string& file_name) {
-    std::fstream full_name_archive(archive_name);
+    std::fstream full_name_archive(archive_name, std::ios::binary);
     if (!full_name_archive.is_open()) {
         std::cerr << "There is a problem with opening archive";
         exit(EXIT_FAILURE);
